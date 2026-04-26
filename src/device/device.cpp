@@ -106,7 +106,7 @@ void Device::screenshot()
     }
 
     // screenshot
-    m_decoder->peekFrame([this](int width, int height, uint8_t* dataRGB32) {
+    m_decoder->PeekFrame([this](int width, int height, uint8_t* dataRGB32) {
        saveFrame(width, height, dataRGB32);
     });
 }
@@ -185,12 +185,12 @@ void Device::initSignals()
                 }
 
                 if (m_decoder) {
-                    m_decoder->open();
+                    m_decoder->Open();
                 }
 
-                m_stream->installVideoSocket(m_server->RemoveVideoSocket());
-                m_stream->setFrameSize(size);
-                m_stream->startDecode();
+                m_stream->InstallVideoSocket(m_server->RemoveVideoSocket());
+                m_stream->SetFrameSize(size);
+                m_stream->StartDecode();
 
                 // Control socket message reception
                 if (auto *ctrl = m_server->GetControlSocket()) {
@@ -216,12 +216,12 @@ void Device::initSignals()
     }
 
     if (m_stream) {
-        connect(m_stream, &Demuxer::onStreamStop, this, [this]() {
+        connect(m_stream, &Demuxer::OnStreamStop, this, [this]() {
             disconnectDevice();
             qDebug() << "stream thread stop";
         });
-        connect(m_stream, &Demuxer::getFrame, this, [this](AVPacket *packet) {
-            if (m_decoder && !m_decoder->push(packet)) {
+        connect(m_stream, &Demuxer::GetFrame, this, [this](AVPacket *packet) {
+            if (m_decoder && !m_decoder->Push(packet)) {
                 qCritical("Could not send packet to decoder");
             }
 
@@ -229,7 +229,7 @@ void Device::initSignals()
                 qCritical("Could not send packet to recorder");
             }
         }, Qt::DirectConnection);
-        connect(m_stream, &Demuxer::getConfigFrame, this, [this](AVPacket *packet) {
+        connect(m_stream, &Demuxer::GetConfigFrame, this, [this](AVPacket *packet) {
             if (m_recorder && !m_recorder->push(packet)) {
                 qCritical("Could not send config packet to recorder");
             }
@@ -237,7 +237,7 @@ void Device::initSignals()
     }
 
     if (m_decoder) {
-        connect(m_decoder, &Decoder::updateFPS, this, [this](quint32 fps) {
+        connect(m_decoder, &Decoder::UpdateFps, this, [this](quint32 fps) {
             for (const auto& item : m_deviceObservers) {
                 item->updateFPS(fps);
             }
@@ -295,12 +295,12 @@ void Device::disconnectDevice() {
     m_server = nullptr;
 
     if (m_stream) {
-        m_stream->stopDecode();
+        m_stream->StopDecode();
     }
 
     // server must stop before decoder, because decoder block main thread
     if (m_decoder) {
-        m_decoder->close();
+        m_decoder->Close();
     }
 
     if (m_recorder) {

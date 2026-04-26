@@ -5,61 +5,47 @@
 #include <QWaitCondition>
 #include <QObject>
 
-#include <functional>
-#include "fpscounter.h"
-
-// forward declarations
 typedef struct AVFrame AVFrame;
 
-class VideoBuffer : public QObject
-{
+// Pure double-buffered AVFrame manager with mutex protection.
+// Decoding thread offers frames; rendering thread consumes them.
+class VideoBuffer : public QObject {
     Q_OBJECT
 public:
-    VideoBuffer(QObject *parent = Q_NULLPTR);
-    virtual ~VideoBuffer();
+    explicit VideoBuffer(QObject *parent = nullptr);
+    ~VideoBuffer() override;
 
-    bool init();
-    void deInit();
-    void lock();
-    void unLock();
-    void setRenderExpiredFrames(bool renderExpiredFrames);
+    bool Init();
+    void DeInit();
 
-    AVFrame *decodingFrame();
-    // set the decoder frame as ready for rendering
-    // this function locks m_mutex during its execution
-    // returns true if the previous frame had been consumed
-    void offerDecodedFrame(bool &previousFrameSkipped);
+    void Lock();
+    void Unlock();
 
-    // mark the rendering frame as consumed and return it
-    // MUST be called with m_mutex locked!!!
-    // the caller is expected to render the returned frame to some texture before
-    // unlocking m_mutex
-    const AVFrame *consumeRenderedFrame();
+    // Returns the frame that the decoder can write into.
+    AVFrame *DecodingFrame();
 
-    void peekRenderedFrame(std::function<void(int width, int height, uint8_t* dataRGB32)> onFrame);
+    // Called from decoder thread to hand off a freshly decoded frame.
+    // previousFrameSkipped: true if the previous frame was not consumed.
+    void OfferDecodedFrame(bool &previousFrameSkipped);
 
-    // wake up and avoid any blocking call
-    void interrupt();
+    // Called from rendering thread (WITH Lock held) to get the frame.
+    const AVFrame *ConsumeRenderedFrame();
 
-signals:
-    void updateFPS(quint32 fps);
+    // Wake up any blocking wait in OfferDecodedFrame.
+    void Interrupt();
+
+    void SetRenderExpiredFrames(bool value);
 
 private:
-    void swap();
+    void Swap();
 
-private:
-    AVFrame *m_decodingFrame = Q_NULLPTR;
-    AVFrame *m_renderingframe = Q_NULLPTR;
+    AVFrame *m_decodingFrame = nullptr;
+    AVFrame *m_renderingFrame = nullptr;
     QMutex m_mutex;
     bool m_renderingFrameConsumed = true;
-    FpsCounter m_fpsCounter;
-
     bool m_renderExpiredFrames = false;
-    QWaitCondition m_renderingFrameConsumedCond;
-
-    // interrupted is not used if expired frames are not rendered
-    // since offering a frame will never block
     bool m_interrupted = false;
+    QWaitCondition m_renderingFrameConsumedCond;
 };
 
-#endif // VIDEO_BUFFER_H
+#endif  // VIDEO_BUFFER_H

@@ -17,11 +17,11 @@ IDeviceManage& IDeviceManage::getInstance() {
 }
 
 DeviceManage::DeviceManage() {
-    Demuxer::init();
+    Demuxer::Init();
 }
 
 DeviceManage::~DeviceManage() {
-    Demuxer::deInit();
+    Demuxer::DeInit();
 }
 
 QPointer<IDevice> DeviceManage::getDevice(const QString &serial)

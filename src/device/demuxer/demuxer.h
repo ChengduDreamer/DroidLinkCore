@@ -1,56 +1,50 @@
-#ifndef STREAM_H
-#define STREAM_H
+#ifndef DEMUXER_H
+#define DEMUXER_H
 
 #include <QPointer>
 #include <QSize>
 #include <QThread>
 
-extern "C"
-{
+extern "C" {
 #include "libavcodec/avcodec.h"
-#include "libavformat/avformat.h"
 }
 
+class PacketReader;
 class VideoSocket;
-class Demuxer : public QThread
-{
+
+class Demuxer : public QThread {
     Q_OBJECT
 public:
-    Demuxer(QObject *parent = Q_NULLPTR);
-    virtual ~Demuxer();
+    explicit Demuxer(QObject *parent = nullptr);
+    ~Demuxer() override;
 
-public:
-    static bool init();
-    static void deInit();
+    static bool Init();
+    static void DeInit();
 
-    void installVideoSocket(VideoSocket* videoSocket);
-    void setFrameSize(const QSize &frameSize);
-    bool startDecode();
-    void stopDecode();
+    void InstallVideoSocket(VideoSocket *socket);
+    void SetFrameSize(const QSize &size);
+    bool StartDecode();
+    void StopDecode();
 
 signals:
-    void onStreamStop();
-    void getFrame(AVPacket* packet);
-    void getConfigFrame(AVPacket* packet);
+    void OnStreamStop();
+    void GetFrame(AVPacket *packet);
+    void GetConfigFrame(AVPacket *packet);
 
 protected:
-    void run();
-    bool recvPacket(AVPacket *packet);
-    bool pushPacket(AVPacket *packet);
-    bool processConfigPacket(AVPacket *packet);
-    bool parse(AVPacket *packet);
-    bool processFrame(AVPacket *packet);
-    qint32 recvData(quint8 *buf, qint32 bufSize);
+    void run() override;
 
 private:
+    bool ProcessConfigPacket(AVPacket *packet);
+    bool ParseAndEmit(AVPacket *packet);
+    bool PushPacket(AVPacket *packet);
+
+    PacketReader *m_reader = nullptr;
     QPointer<VideoSocket> m_videoSocket;
     QSize m_frameSize;
-
-    AVCodecContext *m_codecCtx = Q_NULLPTR;
-    AVCodecParserContext *m_parser = Q_NULLPTR;
-    // successive packets may need to be concatenated, until a non-config
-    // packet is available
-    AVPacket* m_pending = Q_NULLPTR;
+    AVPacket *m_pending = nullptr;
+    AVCodecParserContext *m_parser = nullptr;
+    AVCodecContext *m_codecCtx = nullptr;
 };
 
-#endif // STREAM_H
+#endif  // DEMUXER_H
