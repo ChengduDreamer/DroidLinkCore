@@ -25,7 +25,7 @@ public slots:
     void onInstallApkRequest(const QString &serial, const QString &apkFile);
 
 protected:
-    void onAdbProcessResult(qsc::AdbProcess* adb, bool isApk, qsc::AdbProcess::ADB_EXEC_RESULT processResult);
+    void OnResult(qsc::AdbProcess* adb, bool isApk, qsc::AdbProcess::ADB_EXEC_RESULT processResult);
 
 signals:
     void fileHandlerResult(FILE_HANDLER_RESULT processResult, bool isApk = false);

@@ -19,7 +19,7 @@ AVPacket *Recorder::packetNew(const AVPacket *packet)
     }
 
     if (av_packet_ref(rec, packet)) {
-        delete rec;
+        av_packet_free(&rec);
         return Q_NULLPTR;
     }
     return rec;
@@ -135,6 +135,7 @@ void Recorder::close()
         avformat_free_context(m_formatCtx);
         m_formatCtx = Q_NULLPTR;
     }
+    m_headerWritten = false;
 }
 
 bool Recorder::write(AVPacket *packet)

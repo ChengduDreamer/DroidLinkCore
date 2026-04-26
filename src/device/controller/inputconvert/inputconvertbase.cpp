@@ -11,6 +11,6 @@ InputConvertBase::~InputConvertBase() {}
 void InputConvertBase::sendControlMsg(ControlMsg *msg)
 {
     if (msg && m_controller) {
-        m_controller->postControlMsg(msg);
+        m_controller->PostControlMsg(msg);
     }
 }

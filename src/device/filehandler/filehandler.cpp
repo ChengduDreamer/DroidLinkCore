@@ -1,36 +1,35 @@
 #include "filehandler.h"
 
-FileHandler::FileHandler(QObject *parent) : QObject(parent)
-{
-}
+#include <QPointer>
+
+FileHandler::FileHandler(QObject *parent) : QObject(parent) {}
 
 FileHandler::~FileHandler() {}
 
-void FileHandler::onPushFileRequest(const QString &serial, const QString &file, const QString &devicePath)
-{
-    qsc::AdbProcess* adb = new qsc::AdbProcess;
-    bool isApk = false;
-    connect(adb, &qsc::AdbProcess::adbProcessResult, this, [this, adb, isApk](qsc::AdbProcess::ADB_EXEC_RESULT processResult) {
-        onAdbProcessResult(adb, isApk, processResult);
-    });
-
+void FileHandler::onPushFileRequest(const QString &serial,
+                                     const QString &file,
+                                     const QString &devicePath) {
+    auto *adb = new qsc::AdbProcess(this);
+    connect(adb, &qsc::AdbProcess::adbProcessResult, this,
+            [this, adb](qsc::AdbProcess::ADB_EXEC_RESULT result) {
+                OnResult(adb, false, result);
+            });
     adb->push(serial, file, devicePath);
 }
 
-void FileHandler::onInstallApkRequest(const QString &serial, const QString &apkFile)
-{
-    qsc::AdbProcess* adb = new qsc::AdbProcess;
-    bool isApk = true;
-    connect(adb, &qsc::AdbProcess::adbProcessResult, this, [this, adb, isApk](qsc::AdbProcess::ADB_EXEC_RESULT processResult) {
-        onAdbProcessResult(adb, isApk, processResult);
-    });
-
+void FileHandler::onInstallApkRequest(const QString &serial,
+                                       const QString &apkFile) {
+    auto *adb = new qsc::AdbProcess(this);
+    connect(adb, &qsc::AdbProcess::adbProcessResult, this,
+            [this, adb](qsc::AdbProcess::ADB_EXEC_RESULT result) {
+                OnResult(adb, true, result);
+            });
     adb->install(serial, apkFile);
 }
 
-void FileHandler::onAdbProcessResult(qsc::AdbProcess *adb, bool isApk, qsc::AdbProcess::ADB_EXEC_RESULT processResult)
-{
-    switch (processResult) {
+void FileHandler::OnResult(qsc::AdbProcess *adb, bool isApk,
+                            qsc::AdbProcess::ADB_EXEC_RESULT result) {
+    switch (result) {
     case qsc::AdbProcess::AER_ERROR_START:
     case qsc::AdbProcess::AER_ERROR_EXEC:
     case qsc::AdbProcess::AER_ERROR_MISSING_BINARY:

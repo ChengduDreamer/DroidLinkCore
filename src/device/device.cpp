@@ -95,7 +95,7 @@ const QString &Device::getSerial()
 void Device::updateScript(QString script)
 {
     if (m_controller) {
-        m_controller->updateScript(script);
+        m_controller->UpdateScript(script);
     }
 }
 
@@ -111,20 +111,13 @@ void Device::screenshot()
     });
 }
 
-void Device::showTouch(bool show)
-{
-    AdbProcess *adb = new qsc::AdbProcess();
-    if (!adb) {
-        return;
-    }
-    connect(adb, &qsc::AdbProcess::adbProcessResult, this, [this](qsc::AdbProcess::ADB_EXEC_RESULT processResult) {
-        if (AdbProcess::AER_SUCCESS_START != processResult) {
-            sender()->deleteLater();
-        }
-    });
+void Device::showTouch(bool show) {
+    auto *adb = new qsc::AdbProcess();
+    connect(adb, &qsc::AdbProcess::adbProcessResult, adb,
+            &QObject::deleteLater);
     adb->setShowTouchesEnabled(getSerial(), show);
-
-    qInfo() << getSerial() << " show touch " << (show ? "enable" : "disable");
+    qInfo() << getSerial() << " show touch "
+            << (show ? "enable" : "disable");
 }
 
 bool Device::isReversePort(quint16 port) {
@@ -138,7 +131,7 @@ bool Device::isReversePort(quint16 port) {
 void Device::initSignals()
 {
     if (m_controller) {
-        connect(m_controller, &Controller::grabCursor, this, [this](bool grab){
+        connect(m_controller, &Controller::GrabCursor, this, [this](bool grab){
             for (const auto& item : m_deviceObservers) {
                 item->grabCursor(grab);
             }
@@ -197,13 +190,13 @@ void Device::initSignals()
                     connect(ctrl, &ControlSocket::DeviceMessageReceived, this,
                             [this](DeviceMsg *msg) {
                                 if (m_controller) {
-                                    m_controller->recvDeviceMsg(msg);
+                                    m_controller->RecvDeviceMsg(msg);
                                 }
                             });
                 }
 
                 if (m_params.closeScreen && m_params.display && m_controller) {
-                    m_controller->setDisplayPower(false);
+                    m_controller->SetDisplayPower(false);
                 }
             } else {
                 m_server->Stop();
@@ -254,7 +247,7 @@ bool Device::connectDevice()
     // fix: macos cant recv finished signel, timer is ok
     QTimer::singleShot(0, this, [this]() {
         m_startTimeCount.start();
-        // max size support 480p 720p 1080p 设备原生分辨率
+        // max size support 480p 720p 1080p 设备原生分辨�?
         // support wireless connect, example:
         //m_server->start("192.168.0.174:5555", 27183, m_maxSize, m_bitRate, "");
         // only one devices, serial can be null
@@ -322,7 +315,7 @@ void Device::postGoBack()
     if (!m_controller) {
         return;
     }
-    m_controller->postGoBack();
+    m_controller->PostGoBack();
 
     for (const auto& item : m_deviceObservers) {
         item->postGoBack();
@@ -334,7 +327,7 @@ void Device::postGoHome()
     if (!m_controller) {
         return;
     }
-    m_controller->postGoHome();
+    m_controller->PostGoHome();
 
     for (const auto& item : m_deviceObservers) {
         item->postGoHome();
@@ -346,7 +339,7 @@ void Device::postGoMenu()
     if (!m_controller) {
         return;
     }
-    m_controller->postGoMenu();
+    m_controller->PostGoMenu();
 
     for (const auto& item : m_deviceObservers) {
         item->postGoMenu();
@@ -358,7 +351,7 @@ void Device::postAppSwitch()
     if (!m_controller) {
         return;
     }
-    m_controller->postAppSwitch();
+    m_controller->PostAppSwitch();
 
     for (const auto& item : m_deviceObservers) {
         item->postAppSwitch();
@@ -370,7 +363,7 @@ void Device::postPower()
     if (!m_controller) {
         return;
     }
-    m_controller->postPower();
+    m_controller->PostPower();
 
     for (const auto& item : m_deviceObservers) {
         item->postPower();
@@ -382,7 +375,7 @@ void Device::postVolumeUp()
     if (!m_controller) {
         return;
     }
-    m_controller->postVolumeUp();
+    m_controller->PostVolumeUp();
 
     for (const auto& item : m_deviceObservers) {
         item->postVolumeUp();
@@ -394,7 +387,7 @@ void Device::postVolumeDown()
     if (!m_controller) {
         return;
     }
-    m_controller->postVolumeDown();
+    m_controller->PostVolumeDown();
 
     for (const auto& item : m_deviceObservers) {
         item->postVolumeDown();
@@ -406,7 +399,7 @@ void Device::postCopy()
     if (!m_controller) {
         return;
     }
-    m_controller->copy();
+    m_controller->Copy();
 
     for (const auto& item : m_deviceObservers) {
         item->postCopy();
@@ -418,7 +411,7 @@ void Device::postCut()
     if (!m_controller) {
         return;
     }
-    m_controller->cut();
+    m_controller->Cut();
 
     for (const auto& item : m_deviceObservers) {
         item->postCut();
@@ -430,7 +423,7 @@ void Device::setDisplayPower(bool on)
     if (!m_controller) {
         return;
     }
-    m_controller->setDisplayPower(on);
+    m_controller->SetDisplayPower(on);
 
     for (const auto& item : m_deviceObservers) {
         item->setDisplayPower(on);
@@ -442,7 +435,7 @@ void Device::expandNotificationPanel()
     if (!m_controller) {
         return;
     }
-    m_controller->expandNotificationPanel();
+    m_controller->ExpandNotificationPanel();
 
     for (const auto& item : m_deviceObservers) {
         item->expandNotificationPanel();
@@ -454,7 +447,7 @@ void Device::collapsePanel()
     if (!m_controller) {
         return;
     }
-    m_controller->collapsePanel();
+    m_controller->CollapsePanel();
 
     for (const auto& item : m_deviceObservers) {
         item->collapsePanel();
@@ -466,7 +459,7 @@ void Device::postBackOrScreenOn(bool down)
     if (!m_controller) {
         return;
     }
-    m_controller->postBackOrScreenOn(down);
+    m_controller->PostBackOrScreenOn(down);
 
     for (const auto& item : m_deviceObservers) {
         item->postBackOrScreenOn(down);
@@ -478,7 +471,7 @@ void Device::postTextInput(QString &text)
     if (!m_controller) {
         return;
     }
-    m_controller->postTextInput(text);
+    m_controller->PostTextInput(text);
 
     for (const auto& item : m_deviceObservers) {
         item->postTextInput(text);
@@ -490,7 +483,7 @@ void Device::requestDeviceClipboard()
     if (!m_controller) {
         return;
     }
-    m_controller->requestDeviceClipboard();
+    m_controller->RequestDeviceClipboard();
 
     for (const auto& item : m_deviceObservers) {
         item->requestDeviceClipboard();
@@ -502,7 +495,7 @@ void Device::setDeviceClipboard(bool pause)
     if (!m_controller) {
         return;
     }
-    m_controller->setDeviceClipboard(pause);
+    m_controller->SetDeviceClipboard(pause);
 
     for (const auto& item : m_deviceObservers) {
         item->setDeviceClipboard(pause);
@@ -514,7 +507,7 @@ void Device::clipboardPaste()
     if (!m_controller) {
         return;
     }
-    m_controller->clipboardPaste();
+    m_controller->ClipboardPaste();
 
     for (const auto& item : m_deviceObservers) {
         item->clipboardPaste();
@@ -550,7 +543,7 @@ void Device::mouseEvent(const QMouseEvent *from, const QSize &frameSize, const Q
     if (!m_controller) {
         return;
     }
-    m_controller->mouseEvent(from, frameSize, showSize);
+    m_controller->MouseEvent(from, frameSize, showSize);
 
     for (const auto& item : m_deviceObservers) {
         item->mouseEvent(from, frameSize, showSize);
@@ -562,7 +555,7 @@ void Device::wheelEvent(const QWheelEvent *from, const QSize &frameSize, const Q
     if (!m_controller) {
         return;
     }
-    m_controller->wheelEvent(from, frameSize, showSize);
+    m_controller->WheelEvent(from, frameSize, showSize);
 
     for (const auto& item : m_deviceObservers) {
         item->wheelEvent(from, frameSize, showSize);
@@ -574,7 +567,7 @@ void Device::keyEvent(const QKeyEvent *from, const QSize &frameSize, const QSize
     if (!m_controller) {
         return;
     }
-    m_controller->keyEvent(from, frameSize, showSize);
+    m_controller->KeyEvent(from, frameSize, showSize);
 
     for (const auto& item : m_deviceObservers) {
         item->keyEvent(from, frameSize, showSize);
@@ -586,7 +579,7 @@ bool Device::isCurrentCustomKeymap()
     if (!m_controller) {
         return false;
     }
-    return m_controller->isCurrentCustomKeymap();
+    return m_controller->IsCurrentCustomKeymap();
 }
 
 bool Device::saveFrame(int width, int height, uint8_t* dataRGB32)

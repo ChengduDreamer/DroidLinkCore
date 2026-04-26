@@ -1,263 +1,197 @@
 #include <QApplication>
 #include <QClipboard>
+#include <QDebug>
 
 #include "controller.h"
 #include "controlmsg.h"
+#include "devicemsg.h"
 #include "inputconvertgame.h"
-#include "receiver.h"
-#include "videosocket.h"
 
-Controller::Controller(std::function<qint64(const QByteArray&)> sendData, QString gameScript, QObject *parent)
-    : QObject(parent)
-    , m_sendData(sendData)
-{
-    m_receiver = new Receiver(this);
-    Q_ASSERT(m_receiver);
-
-    updateScript(gameScript);
+Controller::Controller(SendFunc sendData, QString gameScript,
+                         QObject *parent)
+    : QObject(parent), m_sendData(std::move(sendData)) {
+    // Default clipboard provider: direct QApplication access
+    m_clipboardGetter = []() -> QString {
+        return QApplication::clipboard()->text();
+    };
+    m_clipboardSetter = [](const QString &text) {
+        QApplication::clipboard()->setText(text);
+    };
+    UpdateScript(gameScript);
 }
 
 Controller::~Controller() {}
 
-void Controller::postControlMsg(ControlMsg *controlMsg)
-{
+void Controller::SetClipboardProvider(ClipboardGetFunc getter,
+                                       ClipboardSetFunc setter) {
+    if (getter) m_clipboardGetter = std::move(getter);
+    if (setter) m_clipboardSetter = std::move(setter);
+}
+
+void Controller::PostControlMsg(ControlMsg *controlMsg) {
     if (controlMsg) {
         QCoreApplication::postEvent(this, controlMsg);
     }
 }
 
-void Controller::recvDeviceMsg(DeviceMsg *deviceMsg)
-{
-    if (!m_receiver) {
-        return;
-    }
+// ---------------------------------------------------------------------------
+// Device → PC message handling (was in Receiver)
+// ---------------------------------------------------------------------------
 
-    m_receiver->recvDeviceMsg(deviceMsg);
+void Controller::RecvDeviceMsg(DeviceMsg *deviceMsg) {
+    if (!deviceMsg) return;
+
+    switch (deviceMsg->type()) {
+    case DeviceMsg::DMT_GET_CLIPBOARD: {
+        QString text;
+        deviceMsg->getClipboardMsgData(text);
+        if (m_clipboardGetter) {
+            if (m_clipboardGetter() == text) {
+                qDebug("Computer clipboard unchanged");
+                break;
+            }
+        }
+        if (m_clipboardSetter) m_clipboardSetter(text);
+        qInfo("Device clipboard copied");
+        break;
+    }
+    default:
+        break;
+    }
 }
 
-void Controller::test(QRect rc)
-{
-    ControlMsg *controlMsg = new ControlMsg(ControlMsg::CMT_INJECT_TOUCH);
-    controlMsg->setInjectTouchMsgData(
-        static_cast<quint64>(POINTER_ID_MOUSE), AMOTION_EVENT_ACTION_DOWN, AMOTION_EVENT_BUTTON_PRIMARY, AMOTION_EVENT_BUTTON_PRIMARY, rc, 1.0f);
-    postControlMsg(controlMsg);
-}
+// ---------------------------------------------------------------------------
+// Script & keymap
+// ---------------------------------------------------------------------------
 
-void Controller::updateScript(QString gameScript)
-{
-    if (m_inputConvert) {
-        delete m_inputConvert;
-    }
+void Controller::UpdateScript(QString gameScript) {
+    if (m_inputConvert) delete m_inputConvert;
+
     if (!gameScript.isEmpty()) {
-        InputConvertGame *convertgame = new InputConvertGame(this);
-        convertgame->loadKeyMap(gameScript);
-        m_inputConvert = convertgame;
+        auto *game = new InputConvertGame(this);
+        game->loadKeyMap(gameScript);
+        m_inputConvert = game;
     } else {
         m_inputConvert = new InputConvertNormal(this);
     }
-    Q_ASSERT(m_inputConvert);
-    connect(m_inputConvert, &InputConvertBase::grabCursor, this, &Controller::grabCursor);
+    connect(m_inputConvert, &InputConvertBase::grabCursor, this,
+            &Controller::GrabCursor);
 }
 
-bool Controller::isCurrentCustomKeymap()
-{
-    if (!m_inputConvert) {
-        return false;
-    }
-
-    return m_inputConvert->isCurrentCustomKeymap();
+bool Controller::IsCurrentCustomKeymap() {
+    return m_inputConvert && m_inputConvert->isCurrentCustomKeymap();
 }
 
-void Controller::postBackOrScreenOn(bool down)
-{
-    ControlMsg *controlMsg = new ControlMsg(ControlMsg::CMT_BACK_OR_SCREEN_ON);
-    controlMsg->setBackOrScreenOnData(down);
-    if (!controlMsg) {
-        return;
-    }
-    postControlMsg(controlMsg);
+// ---------------------------------------------------------------------------
+// Device actions
+// ---------------------------------------------------------------------------
+
+void Controller::PostGoBack()          { PostKeyCodeClick(AKEYCODE_BACK); }
+void Controller::PostGoHome()          { PostKeyCodeClick(AKEYCODE_HOME); }
+void Controller::PostGoMenu()          { PostKeyCodeClick(AKEYCODE_MENU); }
+void Controller::PostAppSwitch()       { PostKeyCodeClick(AKEYCODE_APP_SWITCH); }
+void Controller::PostPower()           { PostKeyCodeClick(AKEYCODE_POWER); }
+void Controller::PostVolumeUp()        { PostKeyCodeClick(AKEYCODE_VOLUME_UP); }
+void Controller::PostVolumeDown()      { PostKeyCodeClick(AKEYCODE_VOLUME_DOWN); }
+void Controller::Copy()                { PostKeyCodeClick(AKEYCODE_COPY); }
+void Controller::Cut()                 { PostKeyCodeClick(AKEYCODE_CUT); }
+
+void Controller::PostBackOrScreenOn(bool down) {
+    auto *msg = new ControlMsg(ControlMsg::CMT_BACK_OR_SCREEN_ON);
+    msg->setBackOrScreenOnData(down);
+    PostControlMsg(msg);
 }
 
-void Controller::postGoHome()
-{
-    postKeyCodeClick(AKEYCODE_HOME);
+void Controller::ExpandNotificationPanel() {
+    auto *msg = new ControlMsg(ControlMsg::CMT_EXPAND_NOTIFICATION_PANEL);
+    PostControlMsg(msg);
 }
 
-void Controller::postGoMenu()
-{
-    postKeyCodeClick(AKEYCODE_MENU);
+void Controller::CollapsePanel() {
+    auto *msg = new ControlMsg(ControlMsg::CMT_COLLAPSE_PANELS);
+    PostControlMsg(msg);
 }
 
-void Controller::postGoBack()
-{
-    postKeyCodeClick(AKEYCODE_BACK);
+void Controller::SetDisplayPower(bool on) {
+    auto *msg = new ControlMsg(ControlMsg::CMT_SET_DISPLAY_POWER);
+    msg->setDisplayPowerData(on);
+    PostControlMsg(msg);
 }
 
-void Controller::postAppSwitch()
-{
-    postKeyCodeClick(AKEYCODE_APP_SWITCH);
+void Controller::RequestDeviceClipboard() {
+    auto *msg = new ControlMsg(ControlMsg::CMT_GET_CLIPBOARD);
+    PostControlMsg(msg);
 }
 
-void Controller::postPower()
-{
-    postKeyCodeClick(AKEYCODE_POWER);
+void Controller::GetDeviceClipboard(bool cut) {
+    auto *msg = new ControlMsg(ControlMsg::CMT_GET_CLIPBOARD);
+    ControlMsg::GetClipboardCopyKey key =
+        cut ? ControlMsg::GCCK_CUT : ControlMsg::GCCK_COPY;
+    msg->setGetClipboardMsgData(key);
+    PostControlMsg(msg);
 }
 
-void Controller::postVolumeUp()
-{
-    postKeyCodeClick(AKEYCODE_VOLUME_UP);
+void Controller::SetDeviceClipboard(bool pause) {
+    auto *msg = new ControlMsg(ControlMsg::CMT_SET_CLIPBOARD);
+    QString text = m_clipboardGetter();
+    msg->setSetClipboardMsgData(text, pause);
+    PostControlMsg(msg);
 }
 
-void Controller::postVolumeDown()
-{
-    postKeyCodeClick(AKEYCODE_VOLUME_DOWN);
+void Controller::ClipboardPaste() {
+    QString text = m_clipboardGetter();
+    PostTextInput(text);
 }
 
-void Controller::copy()
-{
-    postKeyCodeClick(AKEYCODE_COPY);
+void Controller::PostTextInput(QString &text) {
+    auto *msg = new ControlMsg(ControlMsg::CMT_INJECT_TEXT);
+    msg->setInjectTextMsgData(text);
+    PostControlMsg(msg);
 }
 
-void Controller::cut()
-{
-    postKeyCodeClick(AKEYCODE_CUT);
+// ---------------------------------------------------------------------------
+// Input events → input converter
+// ---------------------------------------------------------------------------
+
+void Controller::MouseEvent(const QMouseEvent *from, const QSize &frameSize,
+                              const QSize &showSize) {
+    if (m_inputConvert) m_inputConvert->mouseEvent(from, frameSize, showSize);
+}
+void Controller::WheelEvent(const QWheelEvent *from, const QSize &frameSize,
+                              const QSize &showSize) {
+    if (m_inputConvert) m_inputConvert->wheelEvent(from, frameSize, showSize);
+}
+void Controller::KeyEvent(const QKeyEvent *from, const QSize &frameSize,
+                            const QSize &showSize) {
+    if (m_inputConvert) m_inputConvert->keyEvent(from, frameSize, showSize);
 }
 
-void Controller::expandNotificationPanel()
-{
-    ControlMsg *controlMsg = new ControlMsg(ControlMsg::CMT_EXPAND_NOTIFICATION_PANEL);
-    if (!controlMsg) {
-        return;
-    }
-    postControlMsg(controlMsg);
-}
+// ---------------------------------------------------------------------------
+// Event dispatch
+// ---------------------------------------------------------------------------
 
-void Controller::collapsePanel()
-{
-    ControlMsg *controlMsg = new ControlMsg(ControlMsg::CMT_COLLAPSE_PANELS);
-    if (!controlMsg) {
-        return;
-    }
-    postControlMsg(controlMsg);
-}
-
-void Controller::requestDeviceClipboard()
-{
-    ControlMsg *controlMsg = new ControlMsg(ControlMsg::CMT_GET_CLIPBOARD);
-    if (!controlMsg) {
-        return;
-    }
-    postControlMsg(controlMsg);
-}
-
-void Controller::getDeviceClipboard(bool cut)
-{
-    ControlMsg *controlMsg = new ControlMsg(ControlMsg::CMT_GET_CLIPBOARD);
-    if (!controlMsg) {
-        return;
-    }
-    ControlMsg::GetClipboardCopyKey copyKey = cut ? ControlMsg::GCCK_CUT : ControlMsg::GCCK_COPY;
-    controlMsg->setGetClipboardMsgData(copyKey);
-    postControlMsg(controlMsg);
-}
-
-void Controller::setDeviceClipboard(bool pause)
-{
-    QClipboard *board = QApplication::clipboard();
-    QString text = board->text();
-    ControlMsg *controlMsg = new ControlMsg(ControlMsg::CMT_SET_CLIPBOARD);
-    if (!controlMsg) {
-        return;
-    }
-    controlMsg->setSetClipboardMsgData(text, pause);
-    postControlMsg(controlMsg);
-}
-
-void Controller::clipboardPaste()
-{
-    QClipboard *board = QApplication::clipboard();
-    QString text = board->text();
-    postTextInput(text);
-}
-
-void Controller::postTextInput(QString &text)
-{
-    ControlMsg *controlMsg = new ControlMsg(ControlMsg::CMT_INJECT_TEXT);
-    if (!controlMsg) {
-        return;
-    }
-    controlMsg->setInjectTextMsgData(text);
-    postControlMsg(controlMsg);
-}
-
-void Controller::setDisplayPower(bool on)
-{
-    ControlMsg *controlMsg = new ControlMsg(ControlMsg::CMT_SET_DISPLAY_POWER);
-    if (!controlMsg) {
-        return;
-    }
-    controlMsg->setDisplayPowerData(on);
-    postControlMsg(controlMsg);
-}
-
-void Controller::mouseEvent(const QMouseEvent *from, const QSize &frameSize, const QSize &showSize)
-{
-    if (m_inputConvert) {
-        m_inputConvert->mouseEvent(from, frameSize, showSize);
-    }
-}
-
-void Controller::wheelEvent(const QWheelEvent *from, const QSize &frameSize, const QSize &showSize)
-{
-    if (m_inputConvert) {
-        m_inputConvert->wheelEvent(from, frameSize, showSize);
-    }
-}
-
-void Controller::keyEvent(const QKeyEvent *from, const QSize &frameSize, const QSize &showSize)
-{
-    if (m_inputConvert) {
-        m_inputConvert->keyEvent(from, frameSize, showSize);
-    }
-}
-
-bool Controller::event(QEvent *event)
-{
-    if (event && static_cast<ControlMsg::Type>(event->type()) == ControlMsg::Control) {
-        ControlMsg *controlMsg = dynamic_cast<ControlMsg *>(event);
-        if (controlMsg) {
-            sendControl(controlMsg->serializeData());
-        }
+bool Controller::event(QEvent *event) {
+    if (event &&
+        static_cast<ControlMsg::Type>(event->type()) == ControlMsg::Control) {
+        auto *msg = dynamic_cast<ControlMsg *>(event);
+        if (msg) SendControlMsg(msg->serializeData());
         return true;
     }
     return QObject::event(event);
 }
 
-bool Controller::sendControl(const QByteArray &buffer)
-{
-    if (buffer.isEmpty()) {
-        return false;
-    }
-    qint32 len = 0;
-    if (m_sendData) {
-        len = static_cast<qint32>(m_sendData(buffer));
-    }
-    return len == buffer.length() ? true : false;
+bool Controller::SendControlMsg(const QByteArray &buffer) {
+    if (buffer.isEmpty() || !m_sendData) return false;
+    return static_cast<qint32>(m_sendData(buffer)) == buffer.length();
 }
 
-void Controller::postKeyCodeClick(AndroidKeycode keycode)
-{
-    ControlMsg *controlEventDown = new ControlMsg(ControlMsg::CMT_INJECT_KEYCODE);
-    if (!controlEventDown) {
-        return;
-    }
-    controlEventDown->setInjectKeycodeMsgData(AKEY_EVENT_ACTION_DOWN, keycode, 0, AMETA_NONE);
-    postControlMsg(controlEventDown);
+void Controller::PostKeyCodeClick(AndroidKeycode keycode) {
+    auto *down = new ControlMsg(ControlMsg::CMT_INJECT_KEYCODE);
+    down->setInjectKeycodeMsgData(AKEY_EVENT_ACTION_DOWN, keycode, 0,
+                                   AMETA_NONE);
+    PostControlMsg(down);
 
-    ControlMsg *controlEventUp = new ControlMsg(ControlMsg::CMT_INJECT_KEYCODE);
-    if (!controlEventUp) {
-        return;
-    }
-    controlEventUp->setInjectKeycodeMsgData(AKEY_EVENT_ACTION_UP, keycode, 0, AMETA_NONE);
-    postControlMsg(controlEventUp);
+    auto *up = new ControlMsg(ControlMsg::CMT_INJECT_KEYCODE);
+    up->setInjectKeycodeMsgData(AKEY_EVENT_ACTION_UP, keycode, 0, AMETA_NONE);
+    PostControlMsg(up);
 }

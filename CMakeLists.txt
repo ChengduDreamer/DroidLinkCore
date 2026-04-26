@@ -97,8 +97,6 @@ set(QSC_DEVICE_SOURCES
     src/device/controller/inputconvert/keymap/keymap.cpp
     src/device/controller/receiver/devicemsg.h
     src/device/controller/receiver/devicemsg.cpp
-    src/device/controller/receiver/receiver.h
-    src/device/controller/receiver/receiver.cpp
     src/device/decoder/avframeconvert.h
     src/device/decoder/avframeconvert.cpp
     src/device/decoder/decoder.h

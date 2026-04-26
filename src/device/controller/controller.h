@@ -1,71 +1,77 @@
-
 #ifndef CONTROLLER_H
 #define CONTROLLER_H
 
 #include <QObject>
 #include <QPointer>
+#include <functional>
 
 #include "inputconvertbase.h"
 
-class QTcpSocket;
-class Receiver;
-class InputConvertBase;
 class DeviceMsg;
-class Controller : public QObject
-{
+class InputConvertBase;
+
+class Controller : public QObject {
     Q_OBJECT
 public:
-    Controller(std::function<qint64(const QByteArray&)> sendData, QString gameScript = "", QObject *parent = Q_NULLPTR);
-    virtual ~Controller();
+    using SendFunc = std::function<qint64(const QByteArray &)>;
+    using ClipboardGetFunc = std::function<QString()>;
+    using ClipboardSetFunc = std::function<void(const QString &)>;
 
-    void postControlMsg(ControlMsg *controlMsg);
-    void recvDeviceMsg(DeviceMsg *deviceMsg);
-    void test(QRect rc);
+    Controller(SendFunc sendData, QString gameScript = "",
+               QObject *parent = nullptr);
+    ~Controller() override;
 
-    void updateScript(QString gameScript = "");
-    bool isCurrentCustomKeymap();
+    void SetClipboardProvider(ClipboardGetFunc getter,
+                               ClipboardSetFunc setter);
 
-    void postGoBack();
-    void postGoHome();
-    void postGoMenu();
-    void postAppSwitch();
-    void postPower();
-    void postVolumeUp();
-    void postVolumeDown();
-    void copy();
-    void cut();
-    void expandNotificationPanel();
-    void collapsePanel();
-    void setDisplayPower(bool on);
+    void PostControlMsg(ControlMsg *controlMsg);
+    void RecvDeviceMsg(DeviceMsg *deviceMsg);
 
-    // for input convert
-    void mouseEvent(const QMouseEvent *from, const QSize &frameSize, const QSize &showSize);
-    void wheelEvent(const QWheelEvent *from, const QSize &frameSize, const QSize &showSize);
-    void keyEvent(const QKeyEvent *from, const QSize &frameSize, const QSize &showSize);
+    void UpdateScript(QString gameScript = "");
+    bool IsCurrentCustomKeymap();
 
-    // turn the screen on if it was off, press BACK otherwise
-    // If the screen is off, it is turned on only on down
-    void postBackOrScreenOn(bool down);
-    void requestDeviceClipboard();
-    void getDeviceClipboard(bool cut = false);
-    void setDeviceClipboard(bool pause = true);
-    void clipboardPaste();
-    void postTextInput(QString &text);
+    // Device actions
+    void PostGoBack();
+    void PostGoHome();
+    void PostGoMenu();
+    void PostAppSwitch();
+    void PostPower();
+    void PostVolumeUp();
+    void PostVolumeDown();
+    void Copy();
+    void Cut();
+    void ExpandNotificationPanel();
+    void CollapsePanel();
+    void SetDisplayPower(bool on);
+    void PostBackOrScreenOn(bool down);
+    void RequestDeviceClipboard();
+    void GetDeviceClipboard(bool cut = false);
+    void SetDeviceClipboard(bool pause = true);
+    void ClipboardPaste();
+    void PostTextInput(QString &text);
+
+    // Input events
+    void MouseEvent(const QMouseEvent *from, const QSize &frameSize,
+                    const QSize &showSize);
+    void WheelEvent(const QWheelEvent *from, const QSize &frameSize,
+                    const QSize &showSize);
+    void KeyEvent(const QKeyEvent *from, const QSize &frameSize,
+                  const QSize &showSize);
 
 signals:
-    void grabCursor(bool grab);
+    void GrabCursor(bool grab);
 
 protected:
-    bool event(QEvent *event);
+    bool event(QEvent *event) override;
 
 private:
-    bool sendControl(const QByteArray &buffer);
-    void postKeyCodeClick(AndroidKeycode keycode);
+    bool SendControlMsg(const QByteArray &buffer);
+    void PostKeyCodeClick(AndroidKeycode keycode);
 
-private:
-    QPointer<Receiver> m_receiver;
     QPointer<InputConvertBase> m_inputConvert;
-    std::function<qint64(const QByteArray&)> m_sendData = Q_NULLPTR;
+    SendFunc m_sendData;
+    ClipboardGetFunc m_clipboardGetter;
+    ClipboardSetFunc m_clipboardSetter;
 };
 
-#endif // CONTROLLER_H
+#endif  // CONTROLLER_H
