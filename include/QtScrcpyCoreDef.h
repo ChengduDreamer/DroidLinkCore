@@ -3,6 +3,14 @@
 
 namespace qsc {
 
+namespace ScrcpyServerVersion {
+inline constexpr const char* kValue = "3.3.4";
+
+inline QString value() {
+    return QStringLiteral("3.3.4");
+}
+}  // namespace ScrcpyServerVersion
+
 struct DeviceParams {
     // necessary
     QString serial = "";              // 设备序列号
@@ -18,7 +26,7 @@ struct DeviceParams {
     int captureOrientationLock = 0;   // 是否锁定采集方向 0不锁定 1锁定指定方向 2锁定原始方向
     int captureOrientation = 0;       // 采集方向 0 90 180 270
     bool stayAwake = false;           // 是否保持唤醒
-    QString serverVersion = "3.3.3";  // server版本
+    QString serverVersion = ScrcpyServerVersion::value();  // server版本
     QString logLevel = "debug";     // log级别 verbose/debug/info/warn/error
     // 编码选项 ""表示默认
     // 例如 CodecOptions="profile=1,level=2"

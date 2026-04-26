@@ -5,6 +5,7 @@
 #include <QPointer>
 #include <QSize>
 
+#include "QtScrcpyCoreDef.h"
 #include "adbprocess.h"
 #include "connection_acceptor.h"
 #include "control_socket.h"
@@ -30,7 +31,7 @@ public:
         int captureOrientationLock = 0;
         int captureOrientation = 0;
         int stayAwake = false;
-        QString serverVersion = "3.3.3";
+        QString serverVersion = qsc::ScrcpyServerVersion::value();
         QString logLevel = "debug";
         QString codecOptions = "";
         QString codecName = "";

@@ -156,6 +156,12 @@ bool Server::Execute() {
     if (-1 != m_params.scid)
         args << QString("scid=%1").arg(m_params.scid, 8, 16, QChar('0'));
 
+    qInfo() << "start server params:"
+            << "serial=" << m_params.serial
+            << "server_local=" << m_params.serverLocalPath
+            << "server_remote=" << m_params.serverRemotePath
+            << "server_version=" << m_params.serverVersion;
+
     m_serverProcess.execute(m_params.serial, args);
     return true;
 }
