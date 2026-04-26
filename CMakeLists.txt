@@ -113,8 +113,10 @@ set(QSC_DEVICE_SOURCES
     src/device/recorder/recorder.cpp
     src/device/server/server.h
     src/device/server/server.cpp
-    src/device/server/tcpserver.h
-    src/device/server/tcpserver.cpp
+    src/device/server/connection_acceptor.h
+    src/device/server/connection_acceptor.cpp
+    src/device/server/control_socket.h
+    src/device/server/control_socket.cpp
     src/device/server/videosocket.h
     src/device/server/videosocket.cpp
     src/device/demuxer/demuxer.h

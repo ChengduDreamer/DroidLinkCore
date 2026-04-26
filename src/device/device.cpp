@@ -3,6 +3,7 @@
 #include <QTimer>
 
 #include "controller.h"
+#include "control_socket.h"
 #include "devicemsg.h"
 #include "decoder.h"
 #include "device.h"
@@ -26,14 +27,13 @@ Device::Device(DeviceParams params, QObject *parent) : IDevice(parent), m_params
                 item->onFrame(width, height, dataY, dataU, dataV, linesizeY, linesizeU, linesizeV);
             }
         }, this);
-        m_fileHandler = new FileHandler(this);
-        m_controller = new Controller([this](const QByteArray& buffer) -> qint64 {
-            if (!m_server || !m_server->getControlSocket()) {
-                return 0;
-            }
-
-            return m_server->getControlSocket()->write(buffer.data(), buffer.length());
-        }, params.gameScript, this);
+    m_fileHandler = new FileHandler(this);
+    m_controller = new Controller([this](const QByteArray& buffer) -> qint64 {
+        if (!m_server || !m_server->GetControlSocket()) {
+            return 0;
+        }
+        return m_server->GetControlSocket()->Send(buffer);
+    }, params.gameScript, this);
     }
 
     m_stream = new Demuxer(this);
@@ -127,9 +127,8 @@ void Device::showTouch(bool show)
     qInfo() << getSerial() << " show touch " << (show ? "enable" : "disable");
 }
 
-bool Device::isReversePort(quint16 port)
-{
-    if (m_server && m_server->isReverse() && port == m_server->getParams().localPort) {
+bool Device::isReversePort(quint16 port) {
+    if (m_server && m_server->IsReverse() && port == m_server->GetParams().localPort) {
         return true;
     }
 
@@ -168,63 +167,49 @@ void Device::initSignals()
     }
 
     if (m_server) {
-        connect(m_server, &Server::serverStarted, this, [this](bool success, const QString &deviceName, const QSize &size) {
+        connect(m_server, &Server::ServerStarted, this, [this](bool success, const QString &deviceName, const QSize &size) {
             m_serverStartSuccess = success;
             emit deviceConnected(success, m_params.serial, deviceName, size);
             if (success) {
                 double diff = m_startTimeCount.elapsed() / 1000.0;
                 qInfo() << QString("server start finish in %1s").arg(diff).toStdString().c_str();
 
-                // init recorder
                 if (m_recorder) {
                     m_recorder->setFrameSize(size);
                     if (!m_recorder->open()) {
                         qCritical("Could not open recorder");
                     }
-
                     if (!m_recorder->startRecorder()) {
                         qCritical("Could not start recorder");
                     }
                 }
 
-                // init decoder
                 if (m_decoder) {
                     m_decoder->open();
                 }
 
-                // init stream
-                m_stream->installVideoSocket(m_server->removeVideoSocket());
+                m_stream->installVideoSocket(m_server->RemoveVideoSocket());
                 m_stream->setFrameSize(size);
                 m_stream->startDecode();
 
-                // recv device msg
-                connect(m_server->getControlSocket(), &QTcpSocket::readyRead, this, [this](){
-                    if (!m_controller) {
-                        return;
-                    }
+                // Control socket message reception
+                if (auto *ctrl = m_server->GetControlSocket()) {
+                    connect(ctrl, &ControlSocket::DeviceMessageReceived, this,
+                            [this](DeviceMsg *msg) {
+                                if (m_controller) {
+                                    m_controller->recvDeviceMsg(msg);
+                                }
+                            });
+                }
 
-                    auto controlSocket = m_server->getControlSocket();
-                    while (controlSocket->bytesAvailable()) {
-                        QByteArray byteArray = controlSocket->peek(controlSocket->bytesAvailable());
-                        DeviceMsg deviceMsg;
-                        qint32 consume = deviceMsg.deserialize(byteArray);
-                        if (0 >= consume) {
-                            break;
-                        }
-                        controlSocket->read(consume);
-                        m_controller->recvDeviceMsg(&deviceMsg);
-                    }
-                });
-
-                // 显示界面时才自动息屏（m_params.display）
                 if (m_params.closeScreen && m_params.display && m_controller) {
                     m_controller->setDisplayPower(false);
                 }
             } else {
-                m_server->stop();
+                m_server->Stop();
             }
         });
-        connect(m_server, &Server::serverStoped, this, [this]() {
+        connect(m_server, &Server::ServerStopped, this, [this]() {
             disconnectDevice();
             qDebug() << "server process stop";
         });
@@ -294,19 +279,20 @@ bool Device::connectDevice()
 
         params.crop = "";
         params.control = true;
-        m_server->start(params);
+        m_server->Start(params);
     });
 
     return true;
 }
 
-void Device::disconnectDevice()
-{
+void Device::disconnectDevice() {
     if (!m_server) {
         return;
     }
-    m_server->stop();
-    m_server = Q_NULLPTR;
+    m_server->Stop();
+    m_server->disconnect(this);
+    m_server->deleteLater();
+    m_server = nullptr;
 
     if (m_stream) {
         m_stream->stopDecode();
